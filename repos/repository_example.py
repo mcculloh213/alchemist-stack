@@ -1,11 +1,11 @@
 from alchemist_stack.database import Context
 from alchemist_stack.repository import RepositoryBase
-from models.m_test import Test
-from tables.t_test import TestTable
+from models.model_example import Example
+from tables.table_example import ExampleTable
 
 __author__ = 'H.D. "Chip" McCullough IV'
 
-class TestRepository(RepositoryBase):
+class ExampleRepository(RepositoryBase):
     """
 
     """
@@ -24,26 +24,26 @@ class TestRepository(RepositoryBase):
 
         :return:
         """
-        return '<class TestRepository->RepositoryBase(database={database}) at {hex_id}>'\
+        return '<class ExampleRepository->RepositoryBase(database={database}) at {hex_id}>'\
             .format(database=str(self.database),
                     hex_id=hex(id(self.database)))
 
-    def create_test(self, obj: Test):
+    def create_example(self, obj: Example):
         self.create_object(obj=obj.to_orm())
 
-    def get_test_by_id(self, test_id: int) -> Test:
+    def get_example_by_id(self, example_id: int) -> Example:
         self.create_session()
-        __query = self.read_object(cls=TestTable)
-        __t = __query.with_session(self.session).get(test_id)
+        __query = self.read_object(cls=ExampleTable)
+        __t = __query.with_session(self.session).get(example_id)
         self.close_session()
-        if isinstance(__t, TestTable):
-            return Test.from_orm(__t)
+        if isinstance(__t, ExampleTable):
+            return Example.from_orm(__t)
 
-    def update_test_by_id(self, test_id: int, values: dict, synchronize_session: str = 'evaluate') -> int:
+    def update_example_by_id(self, example_id: int, values: dict, synchronize_session: str = 'evaluate') -> int:
         self.create_session()
-        __query = self.update_object(cls=TestTable, values=values)
+        __query = self.update_object(cls=ExampleTable, values=values)
         rowcount = __query.with_session(self.session)\
-            .filter(TestTable.primary_key == test_id)\
+            .filter(ExampleTable.primary_key == example_id)\
             .update(values=values,
                     synchronize_session=synchronize_session)
         self.commit_session()

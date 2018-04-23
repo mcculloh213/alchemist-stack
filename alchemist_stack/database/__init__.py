@@ -1,8 +1,8 @@
-from .database import Database
+from .context import Context
 
 __author__ = 'H.D. "Chip" McCullough IV'
 
-__database__ = {
+__settings__ = {
   'drivername': 'postgres',
   'host': 'localhost',
   'port': 5432,
@@ -11,5 +11,5 @@ __database__ = {
   'database': 'data'
 }
 
-def create_database(*args, **kwargs) -> Database:
-  return Database(settings=__database__, *args, **kwargs)
+def create_context(*args, **kwargs) -> Context:
+  return Context(settings=__settings__, *args, **kwargs)

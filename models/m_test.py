@@ -7,7 +7,6 @@ __author__ = 'H.D. "Chip" McCullough IV'
 
 T = TypeVar('T', bound="Test")
 
-# http://www.siafoo.net/article/57
 class Test(object):
     """
     Test class template.
@@ -81,7 +80,8 @@ class Test(object):
         """
         Test Equality Test
         """
-        pass
+        if isinstance(other, T):
+            return self.timestamp == other.timestamp
 
     def __ne__(self, other) -> bool:
         """
@@ -126,7 +126,7 @@ class Test(object):
 
     @classmethod
     def from_orm(cls, obj: TestTable) -> T:
-        return cls.__init__(cls, obj.timestamp, obj.primary_key)
+        return cls(timestamp=obj.timestamp, primary_key=obj.primary_key)
 
     
     

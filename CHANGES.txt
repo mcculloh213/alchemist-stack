@@ -1,0 +1,21 @@
+------------------------------------------------------------------------------------------------------------------------
+Author: H.D. 'Chip' McCullough IV                                                    E-Mail: hdmccullough.work@gmail.com
+Alchemist Stack: Package Changes Log                                  (see changes/detailed/* for more specific changes)
+------------------------------------------------------------------------------------------------------------------------
+
+Release Summary:
+----------------
+
+0.1.0 -- <<Date>>:
+    Initial Release
+
+
+Release Details:
+----------------
+
+Release v0.1.0, <<Date>>
+
+Initial project release, configured for Python3 (v3.6.4).
+
+Currently uses SQL Alchemy (v1.2.4).
+Untested for Python2.

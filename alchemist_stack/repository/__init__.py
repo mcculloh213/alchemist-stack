@@ -1,73 +1,23 @@
-from alchemist_stack.database import create_database, Database
+from alchemist_stack.database import Context
 from .models import Base, B, create_tables
 
 from contextlib import contextmanager
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.query import Query
 from sqlalchemy.orm.session import Session
+from sqlalchemy.util import IdentitySet
 from typing import Any, Type
 
 __author__ = 'H.D. "Chip" McCullough IV'
 
-class Repo(object):
-    """
-    Repo class template.
-    """
-
-    def __init__(self, *args, **kwargs):
-        self.__database = create_database()
-        self.__args = args
-        self.__kwargs = kwargs
-
-    def __call__(self, *args, **kwargs):
-        """
-        Called when an instance of Repo is called, e.g.:
-            `x = Database(...)`
-            `x(...)`
-        """
-        pass
-
-    def __del__(self):
-        """
-        Called when an instance of Database is about to be destroyed.
-        """
-        pass
-
-    def __repr__(self) -> str:
-        """
-        A String representation of the object, with as much information as possible.
-
-        :returns: String representation of Database object.
-        """
-        pass
-
-    def __str__(self) -> str:
-        """
-        A informal, User-Friendly representation of the object.
-
-        :returns: User-Friendly String representation of Database.
-        """
-        pass
-
-    def __unicode__(self):
-        """
-        An informal, User-Friendly representation of the object.
-
-        :returns: User-Friendly Unicode String representation of Database.
-        """
-        pass
-
-    def __nonzero__(self):
-        """
-        Called by built-in function `bool`, or when a truth-value test occurs.
-        """
-        pass
-
 class RepositoryBase(object):
     """
-    Repository Base class
+        Repository Base class for implementing model repositories
     """
 
-    def __init__(self, database: Database, *args, **kwargs):
+    def __init__(self, database: Context, *args, **kwargs):
+        self.__database = database
         self.__session_factory = database.sessionmaker
         self.__session = None
         self.__args = args
@@ -77,36 +27,28 @@ class RepositoryBase(object):
 
     def __call__(self, *args, **kwargs) -> Session:
         """
-        Returns an instance of the session.
+            Calling an instance of RepositoryBase will return a SQL Alchemy Session instance. If the repository doesn't
+        have an existing Session, it will create the Session.
         """
-        if self.__session_is_open:
-            __errors = {
-                'repo': self.__str__(),
-                'session': str(self.__session),
-                'pending_commit': self.__pending_commit,
-            }
-            raise SessionIsOpenException(
-                message='Repository {repo} currently has an open session.'
-                    .format(repo=self.__str__()),
-                errors=__errors,
-                repo=self.__class__
-            )
-        self.__session_is_open = True
-        self.__session = self.__session_factory()
+        if not self.__session_is_open:
+            self.__session_is_open = True
+            self.__session = self.__session_factory()
         return self.__session
 
     def __del__(self):
         """
-        Called when an instance of the Repository Base is about to be destroyed.
+            Called when an instance of the Repository Base is about to be destroyed. This will forcibly close the
+        Session, losing any uncommitted transactions. If you intend to keep those transactions, call `commit_session()`,
+        as this will commit the existing transaction, then close the connection.
         """
         if self.__session_is_open and isinstance(self.__session, Session):
             self.__session.close()
             self.__session = None
-        del self
+            self.__close_session()
 
     def __repr__(self) -> str:
         """
-        A String representation of the object, with as much information as possible.
+            A String representation of the object, with as much information as possible.
 
         :returns: String representation of Repository Base object.
         """
@@ -115,7 +57,7 @@ class RepositoryBase(object):
 
     def __str__(self) -> str:
         """
-        A informal, User-Friendly representation of the object.
+            A informal, User-Friendly representation of the object.
 
         :returns: User-Friendly String representation of Repository Base.
         """
@@ -123,21 +65,21 @@ class RepositoryBase(object):
 
     def __unicode__(self):
         """
-        An informal, User-Friendly representation of the object.
+            An informal, User-Friendly representation of the object.
 
         :returns: User-Friendly Unicode String representation of Repository Base.
         """
-        pass
+        return self.__class__.__name__
 
     def __nonzero__(self):
         """
-        Called by built-in function `bool`, or when a truth-value test occurs.
+            Called by built-in function `bool`, or when a truth-value test occurs.
         """
         return isinstance(self.__session, Session)
 
     def __cmp__(self, other) -> int:
         """
-        Repository Base Comparator. Order is defined by __lt__, __gt__, then __cmp__
+            Repository Base Comparator. Order is defined by __lt__, __gt__, then __cmp__
 
         :returns:
             -1 => self < other
@@ -148,44 +90,48 @@ class RepositoryBase(object):
 
     def __eq__(self, other) -> bool:
         """
-        Repository Base Equality Test
+            Repository Base Equality Test
         """
         pass
 
     def __ne__(self, other) -> bool:
         """
-        Repository Base Inequality Test
+            Repository Base Inequality Test
         """
         pass
 
     def __lt__(self, other) -> bool:
         """
-        Repository Base Less Than Test
+            Repository Base Less Than Test
         """
         pass
 
     def __le__(self, other) -> bool:
         """
-        Repository Base Less Than or Equal To Test
+            Repository Base Less Than or Equal To Test
         """
         pass
 
     def __ge__(self, other) -> bool:
         """
-        Repository Base Greater Than or Equal To Test
+            Repository Base Greater Than or Equal To Test
         """
         pass
 
     def __gt__(self, other) -> bool:
         """
-        Repository Base Greater Than Test
+            Repository Base Greater Than Test
         """
         pass
 
     @contextmanager
-    def __session_scope(self):
+    def session_scope(self):
         """
-        Transactional scope for committing a series of transactions.
+            Transactional scope for committing a series of transactions.
+            If there are no pending transactions (create, update, delete), it will raise a NoPendingCommitException.
+            If the session instance was not able to be created, it will raise a NoOpenSessionException.
+
+        :raises: NoPendingCommitException, NoOpenSessionException
         """
         __session = self.__session_factory()
 
@@ -193,135 +139,320 @@ class RepositoryBase(object):
             try:
                 yield __session
                 __session.commit()
-            except:
+            except SQLAlchemyError as sqlerror:
                 __session.rollback()
-                raise NoPendingCommitException()
+                print(sqlerror)
+                self.__throw_no_pending_commit_exception()
             finally:
                 __session.close()
         else:
-            raise NoOpenSessionException()
+            self.__throw_no_open_session_exception()
+
+    @property
+    def database(self) -> Context:
+        """
+            Gets the current instance of the Database Context.
+
+        :return: Database Context instance
+        :rtype: Context
+        """
+        return self.__database
 
     @property
     def session(self) -> Session:
+        """
+            Gets the current instance of the SQL Alchemy Session.
+            If there is no current session, it will raise a NoOpenSessionException.
+
+        :raises: NoOpenSessionException
+        :return: SQL Alchemy Session instance
+        :rtype: Session
+        """
         if not (self.__session_is_open and isinstance(self.__session, Session)):
-            raise Exception()
+            self.__throw_no_open_session_exception()
         return self.__session
 
     @property
     def pending_commit(self) -> bool:
+        """
+            Gets the boolean value of whether there is a pending transaction in the current SQL Alchemy Session.
+
+        :return:
+            True => There is an open Session, and it contains transactions that need to be committed (create, update, delete).
+            False => There either is not an open Session, or there are no pending transactions (read).
+        :rtype: bool
+        """
         return self.__pending_commit
 
     @property
-    def dirty(self) -> bool:
+    def dirty(self) -> IdentitySet:
+        """
+            Gets the IdentitySet of modified objects in the current open SQL Alchemy Session. If there is no open
+        Session, it returns an empty IdentitySet.
+
+        :return: IdentitySet of modified objects in the current open Session.
+        :rtype: IdentitySet
+        """
         if isinstance(self.__session, Session):
             return self.__session.dirty
         else:
-            return False
+            return IdentitySet()
 
     def create_session(self):
-        if not (self.__session_is_open and self.pending_commit):
-            __errors = {
-                'repo': self.__str__(),
-                'session': str(self.__session),
-                'pending_commit': self.__pending_commit,
-            }
-            raise SessionIsOpenException(
-                message='Repository {repo} currently has an open session.'
-                    .format(repo=self.__str__()),
-                errors=__errors,
-                repo=self.__class__
-            )
+        """
+            Creates a new SQL Alchemy Session.
+            If there is already an open Session, it will raise a SessionIsOpenException.
+
+        :raises: SessionIsOpenException
+        """
+        if self.__session_is_open:
+            self.__throw_session_is_open_exception()
         self.__session = self.__session_factory()
         self.__open_session()
 
     def commit_session(self):
-        if isinstance(self.__session, Session) and self.pending_commit:
+        """
+            Commits the current open SQL Alchemy Session, saving pending transactions to the database.
+            If the Session does not have any pending transactions (create, update, delete), it will raise a
+        NoPendingCommitException.
+            If there is no current open Session, it will raise a NoOpenSessionException.
+
+        :raises: NoPendingCommitException, NoOpenSessionException
+        """
+        if self.__session_is_open and isinstance(self.__session, Session) and self.pending_commit:
             try:
                 self.__session.commit()
                 self.__pending_commit = False
-            except:
+            except SQLAlchemyError as sqlerror:
+                print(sqlerror)
                 self.__session.rollback()
-                raise NoPendingCommitException()
             finally:
                 self.__session.close()
                 self.__close_session()
         else:
-            raise NoPendingCommitException()
+            if not self.__session_is_open:
+                self.__throw_no_open_session_exception()
+            else:
+                self.__throw_no_pending_commit_exception()
 
     def close_session(self, force: bool = False):
+        """
+            Closes the current open SQL Alchemy Session.
+
+        :param force: Whether to force the Session closed without committing or not.
+            Default: False => Session will be committed before closing.
+        :type force: bool
+        """
         if self.__session_is_open and isinstance(self.__session, Session):
             if force:
                 self.__session.close()
                 self.__close_session()
             else:
                 if self.__pending_commit:
-                    raise PendingCommitException()
+                    self.commit_session()
+                else:
+                    self.__session.close()
+                    self.__close_session()
 
     def __open_session(self):
+        """
+            Sets the value of `__session_is_open` to True.
+        """
         self.__session_is_open = True
 
     def __close_session(self):
+        """
+            Sets the value of `__session_is_open` to False.
+        """
+        self.__session = None
         self.__session_is_open = False
 
-    def __create_query(self, cls: B):
-        if isinstance(cls, B):
+    def __create_query(self, cls: Base) -> Query:
+        """
+            Creates a raw SQL Alchemy Query on table `cls`. This Query is not bound to a session, and therefore must be
+        bound at some point using `Query.with_session(session=...)`.
+
+
+        :param cls: The Table to query on (must inherit from Base/declarative_base()).
+        :type: Base
+        :return: A SQL Alchemy Query on table `cls`.
+        :rtype: Query
+        """
+        if issubclass(cls, Base):
             return Query(entities=cls)
         else:
-            __errors = {
-                'repo': self.__str__(),
-                'session': str(self.__session),
-                'entity': str(cls),
-            }
-            raise UnknownModelException(
-                message='The entity {cls} does not inherit from the Declarative Base.'
-                    .format(cls=str(cls)),
-                errors=__errors,
-                model=cls)
+            self.__throw_unknown_model_exception(cls=cls)
 
     def __bind_session_to_query(self, query: Query) -> Query:
         if self.__session_is_open and isinstance(self.__session, Session):
             return query.with_session(session=self.__session)
+        else:
+            self.__throw_no_open_session_exception()
 
     def create_object(self, obj: Type[Base], auto_commit: bool = True):
+        """
+            Simple CREATE (C) operation.
+
+        :param obj: The entity model to be created (inserted). This entity model must inherit from `Base`.
+        :type obj: Base
+        :param auto_commit: Whether to automatically commit the inserted object to the database and close the Session
+        or not.
+            Default: True => The object will be added to a separate Session, which will be committed and closed on
+        completion.
+        :type auto_commit: bool
+        """
         if isinstance(obj, Base):
             if auto_commit:
-                with self.__session_scope() as s:
+                with self.session_scope() as s:
                     if isinstance(s, Session):
                         s.add(obj)
                     else:
-                        raise NoOpenSessionException()
+                        self.__throw_no_open_session_exception()
             else:
                 if not (self.__session_is_open and isinstance(self.__session, Session)):
-                    self.__session = self.create_session()
+                    self.create_session()
                 self.__session.add(obj)
                 self.__pending_commit = True
                 if auto_commit:
                     self.commit_session()
         else:
-            __errors = {
-                'repo': self.__str__(),
-                'session': str(self.__session),
-                'entity': obj,
-            }
-            raise UnknownModelException(
-                message='The entity {cls} does not inherit from the Declarative Base.'
-                    .format(cls=obj.__cls__.__name__),
-                errors=__errors,
-                model=obj.__cls__.__name__)
+            self.__throw_unknown_model_exception(cls=obj)
 
-    def read_object(self, cls: B) -> Query:
-        if isinstance(cls, B):
+    def read_object(self, cls: Base) -> Query:
+        """
+            Simple READ (R) operation.
+            Creates a simple Query on table `cls`. If `cls` does not inherit from Base, it will raise an
+        UnknownModelException.
+
+        :param cls: The class to use for the Query. `cls` must inherit from Base.
+        :type cls: Base
+        :raises: UnknownModelException
+        :return: SQL Alchemy Query instance.
+        :rtype: Query
+        """
+        if issubclass(cls, Base):
             return self.__create_query(cls)
+        else:
+            self.__throw_unknown_model_exception(cls=cls)
 
-    def update_object(self):
-        pass
+    def update_object(self, cls: Base, values: dict) -> Query:
+        """
+            Simple UPDATE (U) operation.
+            Creates a simple Query on table `cls` and sets value of `__pending_commit` to True. If `cls` does not
+        inherit from Base, it will raise an UnknownModelException.
+
+        :param cls: The class to use for the Query. `cls` must inherit from Base.
+        :type cls: Base
+        :param values: Dictionary of `cls` attributes to update. You may use either string keys, or
+            InstrumentedAttribute (cls.attribute) keys.
+        :type values: dict
+        :raises: UnknownColumnException, UnknownUpdateKeyException, UnknownModelException
+        :return: SQL Alchemy Query instance.
+        :rtype: Query
+        """
+        if issubclass(cls, Base):
+            for value in values.keys():
+                if isinstance(value, str):
+                    if not hasattr(cls, value):
+                        self.__throw_unknown_column_exception(cls=cls, column=value)
+                elif isinstance(value, InstrumentedAttribute):
+                    if not hasattr(cls, value.key):
+                        self.__throw_unknown_update_key_exception(cls=cls, key=value, value=values.get(value))
+                else:
+                    self.__throw_unknown_column_exception(cls=cls, column=value)
+            self.__pending_commit = True
+            return self.__create_query(cls=cls)
+        else:
+            self.__throw_unknown_model_exception(cls=cls)
 
     def delete_object(self):
+        """
+            Simple DELETE (D) operation.
+        :return:
+        """
         pass
+
+    def __throw_session_is_open_exception(self):
+        __errors = {
+            'repo': self.__str__(),
+            'session': str(self.__session),
+            'pending_commit': self.__pending_commit,
+        }
+        raise SessionIsOpenException(
+            message='Repository {repo} currently has an open session.'
+                .format(repo=self.__str__()),
+            errors=__errors,
+            repo=self.__class__
+        )
+
+    def __throw_no_open_session_exception(self):
+        __errors = {
+            'repo': self.__str__(),
+        }
+        raise NoOpenSessionException(
+            message='Repository {repo} does not have an open session.'
+                .format(repo=self.__str__()),
+            errors=__errors,
+            repo=self.__class__
+        )
+
+    def __throw_pending_commit_exception(self):
+        pass
+
+    def __throw_no_pending_commit_exception(self):
+        pass
+
+    def __throw_unknown_model_exception(self, cls: Any):
+        __errors = {
+            'repo': self.__str__(),
+            'session': str(self.__session),
+            'entity': cls,
+        }
+        raise UnknownModelException(
+            message='The entity {cls} does not inherit from the Declarative Base.'
+                .format(cls=cls.__name__),
+            errors=__errors,
+            model=cls
+        )
+
+    def __throw_unknown_column_exception(self, cls: Base, column: str):
+        __errors = {
+            'repo': self.__str__(),
+            'session': str(self.__session),
+            'entity': cls,
+            'column': column,
+        }
+        raise UnknownColumnException(
+            message='The entity {cls} does not have a column named {column}'
+                .format(cls=cls.__name__,
+                        column=column),
+            errors=__errors,
+            cls=cls,
+            column=column
+        )
+
+    def __throw_unknown_update_key_exception(self, cls: Base, key: Any, value: Any):
+        __errors = {
+            'repo': self.__str__(),
+            'entity': cls,
+            'update': {
+                key: value,
+            },
+        }
+        raise UnknownUpdateKeyException(
+            message='The entity {cls} cannot perform an update on {key} with value {value}.'
+                .format(cls=cls.__name__,
+                        key=key,
+                        value=value),
+            errors=__errors,
+            cls=cls,
+            key=key,
+            value=value,
+        )
 
 class SessionIsOpenException(Exception):
     """
-    Exception for Repo Objects: Session Is Open
+        Exception for Repo Objects: Session Is Open
     """
 
     def __init__(self, message: str, errors: dict, repo: Type[RepositoryBase], *args):
@@ -340,15 +471,25 @@ class SessionIsOpenException(Exception):
 
 class NoOpenSessionException(Exception):
     """
-    Exception for Repo Objects: No Open Session
+        Exception for Repo Objects: No Open Session
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, message: str, errors: dict, repo: Type[RepositoryBase], *args):
+        super().__init__(message, *args)
+        self.__errors = errors
+        self.__repo = repo
+
+    @property
+    def errors(self) -> dict:
+        return self.__errors
+
+    @property
+    def repo(self) -> RepositoryBase:
+        return self.__repo
 
 class PendingCommitException(Exception):
     """
-    Exception for Repo Objects: Pending Commit
+        Exception for Repo Objects: Pending Commit
     """
 
     def __init__(self):
@@ -356,7 +497,7 @@ class PendingCommitException(Exception):
 
 class NoPendingCommitException(Exception):
     """
-    Exception for Repo Objects: No Pending Commit
+        Exception for Repo Objects: No Pending Commit
     """
 
     def __init__(self):
@@ -364,7 +505,7 @@ class NoPendingCommitException(Exception):
 
 class UnknownModelException(Exception):
     """
-    Exception for Repo Objects: Unknown Model
+        Exception for Repo Objects: Unknown Model
     """
 
     def __init__(self, message: str, errors: dict, model: Any, *args):
@@ -380,4 +521,53 @@ class UnknownModelException(Exception):
     def model(self) -> Any:
         return self.__model
 
+class UnknownColumnException(Exception):
+    """
+        Exception for Repo Objects: Unknown Column
+    """
 
+    def __init__(self, message: str, errors: dict, cls: Base, column: str, *args):
+        super().__init__(message, *args)
+        self.__errors = errors
+        self.__cls = cls
+        self.__column = column
+
+    @property
+    def errors(self) -> dict:
+        return self.__errors
+
+    @property
+    def cls(self) -> Base:
+        return self.__cls
+
+    @property
+    def column(self) -> str:
+        return self.__column
+
+class UnknownUpdateKeyException(Exception):
+    """
+        Exception for Repo Objects: Unknown Update Key
+    """
+
+    def __init__(self, message: str, errors: dict, cls: Base, key: Any, value: Any, *args):
+        super().__init__(message, *args)
+        self.__errors = errors
+        self.__cls = cls
+        self.__key = key
+        self.__value = value
+
+    @property
+    def errors(self) -> dict:
+        return self.__errors
+
+    @property
+    def cls(self) -> Base:
+        return self.__cls
+
+    @property
+    def key(self) -> Any:
+        return self.__key
+
+    @property
+    def value(self) -> Any:
+        return self.__value

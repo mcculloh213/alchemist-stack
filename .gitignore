@@ -1,3 +1,10 @@
 # JetBrains .idea #
 ###################
 .idea/
+
+#   __pycache__   #
+###################
+alchemist_stack/__pycache__
+alchemist_stack/database/__pycache__
+alchemist_stack/repository/__pycache__
+alchemist_stack/repository/models/__pycache__
