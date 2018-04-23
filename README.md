@@ -1,5 +1,6 @@
-from sqlalchemy.orm import Query# alchemist-stack
-**Package Author**: H.D. 'Chip' McCullough IV\
+# alchemist-stack
+**Package Author**: H.D. 'Chip' McCullough IV
+
 **Last Updated**: April 23rd, 2018
 
 **Description**:\
@@ -24,12 +25,13 @@ class ExampleTable(Base):
     timestamp = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self):
-        return '&lt;Example(timestamp={timestamp})&gt;'.format(timestamp=self.timestamp)
+        return '<Example(timestamp={timestamp})>'.format(timestamp=self.timestamp)
 ```
 
 Example Model:
 ```python
 # model_example.py
+
 from tables.table_example import ExampleTable
 
 from datetime import datetime, timezone
@@ -67,7 +69,7 @@ class Example(object):
         
         :returns: String representation of Example object.
         """
-        return '&lt;class Test(pk={pk} timestamp={timestamp}) at {hex_id}&gt;'.format(pk=self.__pk,
+        return '<class Test(pk={pk} timestamp={timestamp}) at {hex_id}>'.format(pk=self.__pk,
                                                                                 timestamp=self.__timestamp,
                                                                                 hex_id=hex(id(self)))
 
@@ -89,12 +91,12 @@ class Example(object):
 
 Example Repository:
 ```python
+# repository_example.py
+
 from alchemist_stack.database import Context
 from alchemist_stack.repository import RepositoryBase
 from models.model_example import Example
 from tables.table_example import ExampleTable
-
-__author__ = 'H.D. "Chip" McCullough IV'
 
 class ExampleRepository(RepositoryBase):
     """
@@ -115,7 +117,7 @@ class ExampleRepository(RepositoryBase):
 
         :return:
         """
-        return '&lt;class ExampleRepository->RepositoryBase(database={database}) at {hex_id}&gt;'\
+        return '<class ExampleRepository->RepositoryBase(database={database}) at {hex_id}>'\
             .format(database=str(self.database),
                     hex_id=hex(id(self.database)))
 
