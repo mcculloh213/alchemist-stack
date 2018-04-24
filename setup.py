@@ -16,9 +16,11 @@ setup(
 
     # Classifiers
     classifiers = [
-        'Development Status :: 1 - Development',
+        'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
-        'Topic :: Software Development :: Databases',
+        'Topic :: Database',
+        'Topic :: Database :: Database Engines/Servers',
+        'Topic :: Software Development :: Libraries :: Python Modules',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6'
