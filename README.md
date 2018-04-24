@@ -7,7 +7,7 @@
 A Flexible Model-Repository-Database stack for use with SQL Alchemy
 
 ## Overview
-Here's probably a good place for a descriptive overview.
+Alchemist Stack is intended to be a thread-safe, multi-session/multi-connection 
 
 ## Usage
 
