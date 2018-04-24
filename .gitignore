@@ -8,3 +8,14 @@ alchemist_stack/__pycache__
 alchemist_stack/context/__pycache__
 alchemist_stack/repository/__pycache__
 alchemist_stack/repository/models/__pycache__
+alchemist_stack/utils/__pycache__
+
+#  Distribution   #
+###################
+alchemist_stack.egg-info/
+build/
+dist/
+
+#  Documentation  #
+###################
+documentation/
