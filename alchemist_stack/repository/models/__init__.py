@@ -1,7 +1,11 @@
+# System Imports
+from typing import TypeVar
+
+# Third-Party Imports
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.ext.declarative import declarative_base
 
-from typing import TypeVar
+# Local Source Imports
 
 B = TypeVar('B', bound='Base')
 Base = declarative_base()

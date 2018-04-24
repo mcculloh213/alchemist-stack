@@ -19,9 +19,9 @@ setup(
 
     # Details:
     url='https://github.com/mcculloh213/alchemist-stack',
-    license='',
-    description='',
-    long_description='',
+    license='LICENSE.md',
+    description='A Thread-Safe, Multi-Session/Multi-Connection Model-Repository-Context base for SQL Alchemy',
+    long_description=open('README.md').read(),
 
     # Dependent Packages (Distributions):
     install_requires=[
