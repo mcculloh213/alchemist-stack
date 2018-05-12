@@ -6,14 +6,17 @@ Alchemist Stack: Package Changes Log
 Release Summary:
 ----------------
 
-0.1.0 -- April 24th, 2018:
+0.1.0.dev1 -- April 24th, 2018:
     Initial Release
+0.1.1.dev1 -- May
+    Changed RepositoryBase to subclass from ABC
+    Added `instance` abstract+class method
 
 
 Release Details:
 ----------------
 
-Release v0.1.0, April 24th, 2018
+Release v0.1.0.dev1, April 24th, 2018
 
 Initial project release, configured for Python3 (v3.6.4), however untested for Python2 (whomp, whomp). Thinking about
 it, it probably hella would not work in Python2.
@@ -39,3 +42,12 @@ can start using it.
 
 Cheers.
 - HDM
+
+------------------------------------------------------------------------------------------------------------------------
+
+Release v0.1.1.dev1
+
+To support thread safe environments, I started implementing an `instance` method in classes that inherit from the
+RepositoryBase. This `instance` method is now an abstract method that users must at the very least implement in
+repository objects that inherit from RepositoryBase. To ensure this, the RepositoryBase object now inherits from ABC
+(Abstract Base Class), which

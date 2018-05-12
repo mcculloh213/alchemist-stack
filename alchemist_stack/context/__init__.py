@@ -29,8 +29,7 @@ __dialects__ = {
 }
 
 def set_connection_string_settings(drivername: str, host: str, port: int, username: str, password: str, database: str) -> NoReturn:
-    """
-        Sets the values of the connection string settings.
+    """ Sets the values of the connection string settings.
 
     :param drivername: The Database driver (e.g. 'postgres', or 'postgres+psycopg2').
     :type drivername: str
@@ -95,9 +94,9 @@ class UnsupportedDialectException(Exception):
 
     def __init__(self, message: str, errors: dict, dialect: str, driver: str = None, *args):
         super().__init__(message, *args)
-        self.__errors: dict = errors
-        self.__dialect: str = dialect
-        self.__driver: str = driver
+        self.__errors = errors
+        self.__dialect = dialect
+        self.__driver = driver
 
     @property
     def errors(self) -> dict:
@@ -116,9 +115,9 @@ class UnsupportedDriverException(Exception):
 
     def __init__(self, message: str, errors: dict, dialect: str, driver: str = None, *args):
         super().__init__(message, *args)
-        self.__errors: dict = errors
-        self.__dialect: str = dialect
-        self.__driver: str = driver
+        self.__errors = errors
+        self.__dialect = dialect
+        self.__driver = driver
 
     @property
     def errors(self) -> dict:

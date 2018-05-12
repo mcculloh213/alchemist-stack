@@ -1,7 +1,7 @@
 from alchemist_stack.context import Context
 from alchemist_stack.repository import RepositoryBase
-from models.model_example import Example
-from tables.table_example import ExampleTable
+from tests.models import Example
+from tests.tables.table_example import ExampleTable
 
 __author__ = 'H.D. "Chip" McCullough IV'
 

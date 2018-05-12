@@ -1,7 +1,7 @@
 from alchemist_stack.context import Context
 from alchemist_stack.repository import RepositoryBase
-from models.m_test import Test
-from tables.t_test import TestTable
+from tests.models.m_test import Test
+from tests.tables import TestTable
 
 __author__ = 'H.D. "Chip" McCullough IV'
 

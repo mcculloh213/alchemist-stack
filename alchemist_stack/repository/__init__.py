@@ -1,9 +1,11 @@
 # System Imports
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from typing import Any, Type
 
 # Third-Party Imports
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.query import Query
 from sqlalchemy.orm.session import Session
@@ -15,8 +17,11 @@ from .models import Base, B, create_tables
 
 __author__ = 'H.D. "Chip" McCullough IV'
 
-class RepositoryBase(object):
-    """ Repository Base class for implementing model repositories """
+class RepositoryBase(ABC):
+    """ Repository Base Abstract Base Class for implementing model repositories """
+
+    __scoped_session_factory = None
+    __active_scoped_session = False
 
     def __init__(self, context: Context, *args, **kwargs):
         """ Repository Base Constructor
@@ -28,29 +33,29 @@ class RepositoryBase(object):
         """
         self.__context = context
         self.__session_factory = context.sessionmaker
-        self.__session = None
+        self.__local_session = None
         self.__args = args
         self.__kwargs = kwargs
-        self.__session_is_open = False
+        self.__active_local_session = False
         self.__pending_commit = False
 
     def __call__(self, *args, **kwargs) -> Session:
         """ Calling an instance of RepositoryBase will return a SQL Alchemy Session instance. If the repository doesn't
                 have an existing Session, it will create the Session.
         """
-        if not self.__session_is_open:
-            self.__session_is_open = True
-            self.__session = self.__session_factory()
-        return self.__session
+        if not self.__active_local_session:
+            self.__active_local_session = True
+            self.__local_session = self.__session_factory()
+        return self.__local_session
 
     def __del__(self):
         """ Called when an instance of the Repository Base is about to be destroyed. This will forcibly close the
                 Session, losing any uncommitted transactions. If you intend to keep those transactions, call
                 `commit_session()`, as this will commit the existing transaction, then close the connection.
         """
-        if self.__session_is_open and isinstance(self.__session, Session):
-            self.__session.close()
-            self.__session = None
+        if self.__active_local_session and isinstance(self.__local_session, Session):
+            self.__local_session.close()
+            self.__local_session = None
             self.__session_close()
 
     def __repr__(self) -> str:
@@ -77,7 +82,7 @@ class RepositoryBase(object):
 
     def __nonzero__(self):
         """ Called by built-in function `bool`, or when a truth-value test occurs. """
-        return isinstance(self.__session, Session)
+        return isinstance(self.__local_session, Session)
 
     def __cmp__(self, other) -> int:
         """ Repository Base Comparator. Order is defined by __lt__, __gt__, then __cmp__
@@ -91,11 +96,15 @@ class RepositoryBase(object):
 
     def __eq__(self, other) -> bool:
         """ Repository Base Equality Test """
-        pass
+        if isinstance(other, RepositoryBase):
+            return self.thread_safe_session is other.thread_safe_session
+        return False
 
     def __ne__(self, other) -> bool:
         """ Repository Base Inequality Test """
-        pass
+        if isinstance(other, RepositoryBase):
+            return self.thread_safe_session is not other.thread_safe_session
+        return True
 
     def __lt__(self, other) -> bool:
         """ Repository Base Less Than Test """
@@ -127,7 +136,7 @@ class RepositoryBase(object):
             try:
                 yield __session
                 __session.commit()
-            except SQLAlchemyError as sqlerror:
+            except SQLAlchemyError as sqlerror:  # TODO: Catch psycopg2 IntegretyError -> Expand to other dialects.
                 __session.rollback()
                 print(sqlerror)
                 self.__throw_no_pending_commit_exception()
@@ -146,7 +155,7 @@ class RepositoryBase(object):
         return self.__context
 
     @property
-    def session(self) -> Session:
+    def local_session(self) -> Session:
         """ Gets the current instance of the SQL Alchemy Session.
                 If there is no current session, it will raise a NoOpenSessionException.
 
@@ -154,9 +163,18 @@ class RepositoryBase(object):
         :return: SQL Alchemy Session instance
         :rtype: Session
         """
-        if not (self.__session_is_open and isinstance(self.__session, Session)):
+        if not (self.__active_local_session and isinstance(self.__local_session, Session)):
             self.__throw_no_open_session_exception()
-        return self.__session
+        return self.__local_session
+
+    @property
+    def thread_safe_session(self) -> Session:
+        """ Gets the current thread-safe Scoped Session.
+
+        :return: SQL Alchemy :code`scoped_session <scoped_session>`
+        :rtype: scoped_session
+        """
+        return self.__scoped_session_factory()
 
     @property
     def pending_commit(self) -> bool:
@@ -177,10 +195,19 @@ class RepositoryBase(object):
         :return: IdentitySet of modified objects in the current open Session.
         :rtype: IdentitySet
         """
-        if isinstance(self.__session, Session):
-            return self.__session.dirty
+        if isinstance(self.__local_session, Session):
+            return self.__local_session.dirty
         else:
             return IdentitySet()
+
+    @classmethod
+    @abstractmethod
+    def instance(cls, context: Context, *args, **kwargs):
+        """
+
+        :return:
+        """
+        raise NotImplementedError
 
     def _create_session(self):
         """ Creates a new SQL Alchemy Session.
@@ -188,10 +215,19 @@ class RepositoryBase(object):
 
         :raises: SessionIsOpenException
         """
-        if self.__session_is_open:
+        if self.__active_local_session:
             self.__throw_session_is_open_exception()
-        self.__session = self.__session_factory()
+        self.__local_session = self.__session_factory()
         self.__session_open()
+
+    def _create_thread_safe_session(self):
+        """ Creates the context to distribute thread-safe Sessions via
+            code:`thread_safe_session <thread_safe_session>`.
+
+        """
+        if not self.__active_scoped_session:
+            self.__scoped_session_factory = scoped_session(self.__session_factory)
+            self.__scoped_session_open()
 
     def _commit_session(self):
         """ Commits the current open SQL Alchemy Session, saving pending transactions to the context.
@@ -201,18 +237,18 @@ class RepositoryBase(object):
 
         :raises: NoPendingCommitException, NoOpenSessionException
         """
-        if self.__session_is_open and isinstance(self.__session, Session) and self.pending_commit:
+        if self.__active_local_session and isinstance(self.__local_session, Session) and self.pending_commit:
             try:
-                self.__session.commit()
+                self.__local_session.commit()
                 self.__pending_commit = False
             except SQLAlchemyError as sqlerror:
                 print(sqlerror)
-                self.__session.rollback()
+                self.__local_session.rollback()
             finally:
-                self.__session.close()
+                self.__local_session.close()
                 self.__session_close()
         else:
-            if not self.__session_is_open:
+            if not self.__active_local_session:
                 self.__throw_no_open_session_exception()
             else:
                 self.__throw_no_pending_commit_exception()
@@ -224,25 +260,47 @@ class RepositoryBase(object):
             Default: False => Session will be committed before closing.
         :type force: bool
         """
-        if self.__session_is_open and isinstance(self.__session, Session):
+        if self.__active_local_session and isinstance(self.__local_session, Session):
             if force:
-                self.__session.close()
+                self.__local_session.close()
                 self.__session_close()
             else:
                 if self.__pending_commit:
                     self._commit_session()
                 else:
-                    self.__session.close()
+                    self.__local_session.close()
                     self.__session_close()
+
+    def _remove_thread_safe_sessions(self, force: bool = False):
+        """ Closes the current SQL Alchemy Scoped Session
+
+        :param force: Whether to force the Session closed without committing or not.
+            Default: False => Session will be committed before closing.
+        :type force: bool
+        """
+        if self.__active_scoped_session:
+            if force:
+                self.__scoped_session_factory.remove()
 
     def __session_open(self):
         """ Sets the value of `__session_is_open` to True. """
-        self.__session_is_open = True
+        self.__active_local_session = True
+
+    def __scoped_session_open(self):
+        """ Sets the value of `__active_scoped_session` to True. """
+        self.__active_scoped_session = True
 
     def __session_close(self):
         """ Sets the value of `__session_is_open` to False. """
-        self.__session = None
-        self.__session_is_open = False
+        self.__local_session = None
+        self.__active_local_session = False
+
+    def __scoped_session_close(self):
+        """ Kills all thread-local sessions, and sets the value of `__active_scoped_session` to False. """
+        if isinstance(self.__scoped_session_factory, scoped_session):
+            self.__scoped_session_factory.remove()
+            self.__scoped_session_factory = None
+            self.__active_scoped_session = False
 
     def __create_query(self, cls: Base) -> Query:
         """ Creates a raw SQL Alchemy Query on table `cls`. This Query is not bound to a session, and therefore must be
@@ -267,10 +325,95 @@ class RepositoryBase(object):
         :param query:
         :return:
         """
-        if self.__session_is_open and isinstance(self.__session, Session):
-            return query.with_session(session=self.__session)
+        if self.__active_local_session and isinstance(self.__local_session, Session):
+            return query.with_session(session=self.__local_session)
         else:
             self.__throw_no_open_session_exception()
+
+    def __throw_session_is_open_exception(self):
+        """ Raise a :code:`SessionIsOpenException <SessionIsOpenException>` """
+        __errors = {
+            'repo': self.__str__(),
+            'session': str(self.__local_session),
+            'pending_commit': self.__pending_commit,
+        }
+        raise SessionIsOpenException(
+            message='Repository {repo} currently has an open session.'
+                .format(repo=self.__str__()),
+            errors=__errors,
+            repo=self.__class__
+        )
+
+    def __throw_no_open_session_exception(self):
+        """ Raise a :code:`NoOpenSessionException <NoOpenSessionException>` """
+        __errors = {
+            'repo': self.__str__(),
+        }
+        raise NoOpenSessionException(
+            message='Repository {repo} does not have an open session.'
+                .format(repo=self.__str__()),
+            errors=__errors,
+            repo=self.__class__
+        )
+
+    def __throw_pending_commit_exception(self):
+        """ Raise a :code:`PendingCommitException <PendingCommitException>` """
+        pass
+
+    def __throw_no_pending_commit_exception(self):
+        """ Raise a :code:`NoPendingCommitException <NoPendingCommitException>` """
+        pass
+
+    def __throw_unknown_model_exception(self, cls: Any):
+        """ Raise a :code:`UnknownModelException <UnknownModelException>` """
+        __errors = {
+            'repo': self.__str__(),
+            'session': str(self.__local_session),
+            'entity': cls,
+        }
+        raise UnknownModelException(
+            message='The entity {cls} does not inherit from the Declarative Base.'
+                .format(cls=cls.__name__),
+            errors=__errors,
+            model=cls
+        )
+
+    def __throw_unknown_column_exception(self, cls: Base, column: str):
+        """ Raise a :code:`UnknownColumnException <UnknownColumnException>` """
+        __errors = {
+            'repo': self.__str__(),
+            'session': str(self.__local_session),
+            'entity': cls,
+            'column': column,
+        }
+        raise UnknownColumnException(
+            message='The entity {cls} does not have a column named {column}'
+                .format(cls=cls.__name__,
+                        column=column),
+            errors=__errors,
+            cls=cls,
+            column=column
+        )
+
+    def __throw_unknown_update_key_exception(self, cls: Base, key: Any, value: Any):
+        """ Raise a :code:`SessionIsOpenException <SessionIsOpenException>` """
+        __errors = {
+            'repo': self.__str__(),
+            'entity': cls,
+            'update': {
+                key: value,
+            },
+        }
+        raise UnknownUpdateKeyException(
+            message='The entity {cls} cannot perform an update on {key} with value {value}.'
+                .format(cls=cls.__name__,
+                        key=key,
+                        value=value),
+            errors=__errors,
+            cls=cls,
+            key=key,
+            value=value,
+        )
 
     def _create_object(self, obj: Type[Base], auto_commit: bool = True):
         """ Simple CREATE (Crud) operation.
@@ -291,9 +434,9 @@ class RepositoryBase(object):
                     else:
                         self.__throw_no_open_session_exception()
             else:
-                if not (self.__session_is_open and isinstance(self.__session, Session)):
+                if not (self.__active_local_session and isinstance(self.__local_session, Session)):
                     self._create_session()
-                self.__session.add(obj)
+                self.__local_session.add(obj)
                 self.__pending_commit = True
                 if auto_commit:
                     self._commit_session()
@@ -353,90 +496,15 @@ class RepositoryBase(object):
         """
         pass
 
-    def __throw_session_is_open_exception(self):
-        """ Raise a :code:`SessionIsOpenException <SessionIsOpenException>` """
-        __errors = {
-            'repo': self.__str__(),
-            'session': str(self.__session),
-            'pending_commit': self.__pending_commit,
-        }
-        raise SessionIsOpenException(
-            message='Repository {repo} currently has an open session.'
-                .format(repo=self.__str__()),
-            errors=__errors,
-            repo=self.__class__
-        )
-
-    def __throw_no_open_session_exception(self):
-        """ Raise a :code:`NoOpenSessionException <NoOpenSessionException>` """
-        __errors = {
-            'repo': self.__str__(),
-        }
-        raise NoOpenSessionException(
-            message='Repository {repo} does not have an open session.'
-                .format(repo=self.__str__()),
-            errors=__errors,
-            repo=self.__class__
-        )
-
-    def __throw_pending_commit_exception(self):
-        """ Raise a :code:`PendingCommitException <PendingCommitException>` """
-        pass
-
-    def __throw_no_pending_commit_exception(self):
-        """ Raise a :code:`NoPendingCommitException <NoPendingCommitException>` """
-        pass
-
-    def __throw_unknown_model_exception(self, cls: Any):
-        """ Raise a :code:`UnknownModelException <UnknownModelException>` """
-        __errors = {
-            'repo': self.__str__(),
-            'session': str(self.__session),
-            'entity': cls,
-        }
-        raise UnknownModelException(
-            message='The entity {cls} does not inherit from the Declarative Base.'
-                .format(cls=cls.__name__),
-            errors=__errors,
-            model=cls
-        )
-
-    def __throw_unknown_column_exception(self, cls: Base, column: str):
-        """ Raise a :code:`UnknownColumnException <UnknownColumnException>` """
-        __errors = {
-            'repo': self.__str__(),
-            'session': str(self.__session),
-            'entity': cls,
-            'column': column,
-        }
-        raise UnknownColumnException(
-            message='The entity {cls} does not have a column named {column}'
-                .format(cls=cls.__name__,
-                        column=column),
-            errors=__errors,
-            cls=cls,
-            column=column
-        )
-
-    def __throw_unknown_update_key_exception(self, cls: Base, key: Any, value: Any):
-        """ Raise a :code:`SessionIsOpenException <SessionIsOpenException>` """
-        __errors = {
-            'repo': self.__str__(),
-            'entity': cls,
-            'update': {
-                key: value,
-            },
-        }
-        raise UnknownUpdateKeyException(
-            message='The entity {cls} cannot perform an update on {key} with value {value}.'
-                .format(cls=cls.__name__,
-                        key=key,
-                        value=value),
-            errors=__errors,
-            cls=cls,
-            key=key,
-            value=value,
-        )
+    def base_query_on(self, cls: Base) -> Query:
+        if isinstance(cls, Base):
+            if self.__active_scoped_session:
+                return self.__scoped_session_factory.query_property(query_cls=cls)
+            else:
+                self._create_thread_safe_session()
+                return self.__scoped_session_factory.query_property(query_cls=cls)
+        else:
+            self.__throw_unknown_model_exception(cls=cls)
 
 class SessionIsOpenException(Exception):
     """ Exception for Repo Objects: Session Is Open """

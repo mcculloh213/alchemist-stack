@@ -1,4 +1,4 @@
-from tables.table_example import ExampleTable
+from tests.tables.table_example import ExampleTable
 
 from datetime import datetime, timezone
 from typing import TypeVar

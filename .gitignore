@@ -18,4 +18,4 @@ dist/
 
 #  Documentation  #
 ###################
-documentation/
+documentation/build/

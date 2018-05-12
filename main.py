@@ -1,7 +1,7 @@
 from alchemist_stack.context import create_context
 from alchemist_stack.repository.models import create_tables
-from models.m_test import Test
-from repos.r_test import TestRepository
+from tests.models.m_test import Test
+from tests.repos.r_test import TestRepository
 
 from datetime import datetime, timezone
 

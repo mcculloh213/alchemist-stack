@@ -23,11 +23,11 @@ class Context(object):
     def __call__(self) -> Session:
         """ Calling an instance of Context will return a new SQL Alchemy :class:`Session <Session>` object.
 
-        Usage::
+        Usage:
             >>> db = Context(settings={...})
             >>> session = db()
 
-        Equivalent To::
+        Equivalent To:
             >>> db = Context(settings={...})
             >>> session_factory = db.sessionmaker
             >>> session = session_factory()

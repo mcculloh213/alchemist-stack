@@ -1,4 +1,4 @@
-from tables.t_test import TestTable
+from tests.tables import TestTable
 
 from datetime import datetime, timezone
 from typing import TypeVar
