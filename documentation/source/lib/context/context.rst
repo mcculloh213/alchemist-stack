@@ -1,4 +1,4 @@
-alchemist_stack.context.context Context Class
+Alchemist Stack: Context Class
 ---------------------------------------------
 
 .. py:class:: Context(settings : dict)

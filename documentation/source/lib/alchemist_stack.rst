@@ -1,5 +1,5 @@
-alchemist_stack package
-=======================
+Alchemist Stack
+===============
 
 Subpackages
 -----------
@@ -8,9 +8,10 @@ Subpackages
     :maxdepth: 3
     :titlesonly:
 
-    context/context
-    repository/repository
-    utils/utils
+    context/index
+    repository/index
+    repository/models/index
+    utils/index
 
 Module contents
 ---------------

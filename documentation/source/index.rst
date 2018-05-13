@@ -8,13 +8,7 @@ Welcome to Alchemist Stack's documentation!
 
 Table of Contents:
 
-.. toctree::
-    :maxdepth: 2
-    :glob:
-
-    lib/context/*
-    lib/repository/*
-    lib/utils/*
+.. include:: modules.rst
 
 Indices and tables
 ==================

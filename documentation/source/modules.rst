@@ -1,7 +1,5 @@
-alchemist_stack
-===============
-
 .. toctree::
    :maxdepth: 4
+   :titlesonly:
 
-   alchemist_stack
+   lib/alchemist_stack
